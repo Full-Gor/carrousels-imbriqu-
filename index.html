@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrousel 5 Étages Three.js</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Arial', sans-serif;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+        
+        .btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 12px 24px;
+            margin: 0 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn:hover {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+            transform: translateY(-2px);
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div class="loading">Chargement...</div>
+        <div id="info">
+            <h3>Carrousel 5 Étages de Cartes</h3>
+            <p>Un seul clic pour faire tourner les 5 carrousels entre les étages !</p>
+        </div>
+        <div id="controls">
+            <button class="btn" onclick="switchCarousels()">Alterner</button>
+            <button class="btn" onclick="autoRotate()">Auto-rotation</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, carousel1, carousel2, carousel3, carousel4, carousel5;
+        let isAnimating = false;
+        let autoRotation = false;
+        let animationId;
+        
+        // Configuration des carrousels - UNE COULEUR PAR CARROUSEL
+        const config = {
+            carousel1: {
+                radius: 8,
+                items: 8,
+                color: '#ff6b6b', // Rouge uniforme
+                rotationSpeed: 0.01
+            },
+            carousel2: {
+                radius: 5,
+                items: 6,
+                color: '#4ecdc4', // Turquoise uniforme
+                rotationSpeed: -0.015
+            },
+            carousel3: {
+                radius: 6.5,
+                items: 7,
+                color: '#74b9ff', // Bleu uniforme
+                rotationSpeed: 0.008
+            },
+            carousel4: {
+                radius: 7.5,
+                items: 9,
+                color: '#fdcb6e', // Orange uniforme
+                rotationSpeed: -0.012
+            },
+            carousel5: {
+                radius: 4,
+                items: 5,
+                color: '#55efc4', // Vert uniforme
+                rotationSpeed: 0.018
+            }
+        };
+        
+        function init() {
+            // Scène
+            scene = new THREE.Scene();
+            
+            // Caméra
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 25);
+            camera.lookAt(0, 0, 0);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setClearColor(0x000000, 0);
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // Éclairage
+            setupLighting();
+            
+            // Création des carrousels
+            createCarousel1();
+            createCarousel2();
+            createCarousel3();
+            createCarousel4();
+            createCarousel5();
+            
+            // Événements
+            setupEvents();
+            
+            // Masquer le loading
+            document.querySelector('.loading').style.display = 'none';
+            
+            // Démarrer l'animation
+            animate();
+        }
+        
+        function setupLighting() {
+            // Lumière ambiante
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            // Lumière directionnelle principale
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 10, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            
+            // Lumières ponctuelles colorées
+            const pointLight1 = new THREE.PointLight(0x00ff88, 0.5, 50);
+            pointLight1.position.set(15, 5, 15);
+            scene.add(pointLight1);
+            
+            const pointLight2 = new THREE.PointLight(0xff0088, 0.5, 50);
+            pointLight2.position.set(-15, 5, -15);
+            scene.add(pointLight2);
+        }
+        
+        function createCarousel1() {
+            carousel1 = new THREE.Group();
+            const { radius, items, color } = config.carousel1;
+            
+            for (let i = 0; i < items; i++) {
+                const angle = (i / items) * Math.PI * 2;
+                
+                // Créer une carte
+                const cardGroup = new THREE.Group();
+                
+                // Géométrie de la carte - COULEUR UNIFORME
+                const cardGeometry = new THREE.PlaneGeometry(2.5, 3.5);
+                const cardMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
+                });
+                
+                const card = new THREE.Mesh(cardGeometry, cardMaterial);
+                
+                // Bordure de la carte
+                const borderGeometry = new THREE.PlaneGeometry(2.7, 3.7);
+                const borderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    side: THREE.DoubleSide
+                });
+                const border = new THREE.Mesh(borderGeometry, borderMaterial);
+                border.position.z = -0.01;
+                
+                // Motif sur la carte
+                const symbolGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.1);
+                const symbolMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    shininess: 100
+                });
+                const symbol = new THREE.Mesh(symbolGeometry, symbolMaterial);
+                symbol.position.z = 0.1;
+                
+                cardGroup.add(border);
+                cardGroup.add(card);
+                cardGroup.add(symbol);
+                
+                cardGroup.position.set(
+                    Math.cos(angle) * radius,
+                    0,
+                    Math.sin(angle) * radius
+                );
+                
+                cardGroup.rotation.y = angle + Math.PI/2;
+                cardGroup.castShadow = true;
+                cardGroup.receiveShadow = true;
+                
+                carousel1.add(cardGroup);
+            }
+            
+            carousel1.position.y = 20;
+            carousel1.userData = {
+                level: 1,
+                targetScale: 1,
+                targetY: 20
+            };
+            
+            scene.add(carousel1);
+        }
+        
+        function createCarousel2() {
+            carousel2 = new THREE.Group();
+            const { radius, items, color } = config.carousel2;
+            
+            for (let i = 0; i < items; i++) {
+                const angle = (i / items) * Math.PI * 2;
+                
+                // Créer une carte
+                const cardGroup = new THREE.Group();
+                
+                // Géométrie de la carte - COULEUR UNIFORME
+                const cardGeometry = new THREE.PlaneGeometry(2, 2.8);
+                const cardMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.85,
+                    side: THREE.DoubleSide,
+                    emissive: new THREE.Color(color).multiplyScalar(0.1)
+                });
+                
+                const card = new THREE.Mesh(cardGeometry, cardMaterial);
+                
+                // Bordure de la carte
+                const borderGeometry = new THREE.PlaneGeometry(2.2, 3);
+                const borderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x333333,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
+                });
+                const border = new THREE.Mesh(borderGeometry, borderMaterial);
+                border.position.z = -0.01;
+                
+                // Motif sur la carte
+                const symbolGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+                const symbolMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    shininess: 100
+                });
+                const symbol = new THREE.Mesh(symbolGeometry, symbolMaterial);
+                symbol.position.z = 0.1;
+                
+                cardGroup.add(border);
+                cardGroup.add(card);
+                cardGroup.add(symbol);
+                
+                cardGroup.position.set(
+                    Math.cos(angle) * radius,
+                    0,
+                    Math.sin(angle) * radius
+                );
+                
+                cardGroup.rotation.y = angle + Math.PI/2;
+                cardGroup.castShadow = true;
+                cardGroup.receiveShadow = true;
+                
+                carousel2.add(cardGroup);
+            }
+            
+            carousel2.scale.set(0.85, 0.85, 0.85);
+            carousel2.position.y = 8;
+            carousel2.userData = {
+                level: 2,
+                targetScale: 0.85,
+                targetY: 8
+            };
+            
+            scene.add(carousel2);
+        }
+        
+        function createCarousel3() {
+            carousel3 = new THREE.Group();
+            const { radius, items, color } = config.carousel3;
+            
+            for (let i = 0; i < items; i++) {
+                const angle = (i / items) * Math.PI * 2;
+                
+                // Créer une carte
+                const cardGroup = new THREE.Group();
+                
+                // Géométrie de la carte - COULEUR UNIFORME
+                const cardGeometry = new THREE.PlaneGeometry(2.2, 3.2);
+                const cardMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.87,
+                    side: THREE.DoubleSide,
+                    emissive: new THREE.Color(color).multiplyScalar(0.08)
+                });
+                
+                const card = new THREE.Mesh(cardGeometry, cardMaterial);
+                
+                // Bordure de la carte
+                const borderGeometry = new THREE.PlaneGeometry(2.4, 3.4);
+                const borderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x666666,
+                    transparent: true,
+                    opacity: 0.85,
+                    side: THREE.DoubleSide
+                });
+                const border = new THREE.Mesh(borderGeometry, borderMaterial);
+                border.position.z = -0.01;
+                
+                // Motif sur la carte
+                const symbolGeometry = new THREE.TorusGeometry(0.25, 0.1, 6, 12);
+                const symbolMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    shininess: 100
+                });
+                const symbol = new THREE.Mesh(symbolGeometry, symbolMaterial);
+                symbol.position.z = 0.1;
+                symbol.rotation.x = Math.PI / 2;
+                
+                cardGroup.add(border);
+                cardGroup.add(card);
+                cardGroup.add(symbol);
+                
+                cardGroup.position.set(
+                    Math.cos(angle) * radius,
+                    0,
+                    Math.sin(angle) * radius
+                );
+                
+                cardGroup.rotation.y = angle + Math.PI/2;
+                cardGroup.castShadow = true;
+                cardGroup.receiveShadow = true;
+                
+                carousel3.add(cardGroup);
+            }
+            
+            carousel3.scale.set(0.7, 0.7, 0.7);
+            carousel3.position.y = -4;
+            carousel3.userData = {
+                level: 3,
+                targetScale: 0.7,
+                targetY: -4
+            };
+            
+            scene.add(carousel3);
+        }
+        
+        function createCarousel4() {
+            carousel4 = new THREE.Group();
+            const { radius, items, color } = config.carousel4;
+            
+            for (let i = 0; i < items; i++) {
+                const angle = (i / items) * Math.PI * 2;
+                
+                // Créer une carte
+                const cardGroup = new THREE.Group();
+                
+                // Géométrie de la carte - COULEUR UNIFORME
+                const cardGeometry = new THREE.PlaneGeometry(2.3, 3.3);
+                const cardMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.88,
+                    side: THREE.DoubleSide,
+                    emissive: new THREE.Color(color).multiplyScalar(0.12)
+                });
+                
+                const card = new THREE.Mesh(cardGeometry, cardMaterial);
+                
+                // Bordure de la carte
+                const borderGeometry = new THREE.PlaneGeometry(2.5, 3.5);
+                const borderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x444444,
+                    transparent: true,
+                    opacity: 0.87,
+                    side: THREE.DoubleSide
+                });
+                const border = new THREE.Mesh(borderGeometry, borderMaterial);
+                border.position.z = -0.01;
+                
+                // Motif sur la carte (pyramide)
+                const symbolGeometry = new THREE.ConeGeometry(0.35, 0.7, 6);
+                const symbolMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    shininess: 100
+                });
+                const symbol = new THREE.Mesh(symbolGeometry, symbolMaterial);
+                symbol.position.z = 0.35;
+                
+                cardGroup.add(border);
+                cardGroup.add(card);
+                cardGroup.add(symbol);
+                
+                cardGroup.position.set(
+                    Math.cos(angle) * radius,
+                    0,
+                    Math.sin(angle) * radius
+                );
+                
+                cardGroup.rotation.y = angle + Math.PI/2;
+                cardGroup.castShadow = true;
+                cardGroup.receiveShadow = true;
+                
+                carousel4.add(cardGroup);
+            }
+            
+            carousel4.scale.set(0.55, 0.55, 0.55);
+            carousel4.position.y = -16;
+            carousel4.userData = {
+                level: 4,
+                targetScale: 0.55,
+                targetY: -16
+            };
+            
+            scene.add(carousel4);
+        }
+        
+        function createCarousel5() {
+            carousel5 = new THREE.Group();
+            const { radius, items, color } = config.carousel5;
+            
+            for (let i = 0; i < items; i++) {
+                const angle = (i / items) * Math.PI * 2;
+                
+                // Créer une carte
+                const cardGroup = new THREE.Group();
+                
+                // Géométrie de la carte - COULEUR UNIFORME
+                const cardGeometry = new THREE.PlaneGeometry(1.8, 2.5);
+                const cardMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide,
+                    emissive: new THREE.Color(color).multiplyScalar(0.15)
+                });
+                
+                const card = new THREE.Mesh(cardGeometry, cardMaterial);
+                
+                // Bordure de la carte
+                const borderGeometry = new THREE.PlaneGeometry(2, 2.7);
+                const borderMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x111111,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
+                });
+                const border = new THREE.Mesh(borderGeometry, borderMaterial);
+                border.position.z = -0.01;
+                
+                // Motif sur la carte (octaèdre)
+                const symbolGeometry = new THREE.OctahedronGeometry(0.4);
+                const symbolMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xffffff,
+                    shininess: 100
+                });
+                const symbol = new THREE.Mesh(symbolGeometry, symbolMaterial);
+                symbol.position.z = 0.2;
+                
+                cardGroup.add(border);
+                cardGroup.add(card);
+                cardGroup.add(symbol);
+                
+                cardGroup.position.set(
+                    Math.cos(angle) * radius,
+                    0,
+                    Math.sin(angle) * radius
+                );
+                
+                cardGroup.rotation.y = angle + Math.PI/2;
+                cardGroup.castShadow = true;
+                cardGroup.receiveShadow = true;
+                
+                carousel5.add(cardGroup);
+            }
+            
+            carousel5.scale.set(0.4, 0.4, 0.4);
+            carousel5.position.y = -28;
+            carousel5.userData = {
+                level: 5,
+                targetScale: 0.4,
+                targetY: -28
+            };
+            
+            scene.add(carousel5);
+        }
+        
+        function switchCarousels() {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            const duration = 4000; // 4 secondes pour 5 carrousels
+            const startTime = Date.now();
+            
+            // Sauvegarder les états actuels
+            const carousel1StartScale = carousel1.scale.x;
+            const carousel1StartY = carousel1.position.y;
+            const carousel2StartScale = carousel2.scale.x;
+            const carousel2StartY = carousel2.position.y;
+            const carousel3StartScale = carousel3.scale.x;
+            const carousel3StartY = carousel3.position.y;
+            const carousel4StartScale = carousel4.scale.x;
+            const carousel4StartY = carousel4.position.y;
+            const carousel5StartScale = carousel5.scale.x;
+            const carousel5StartY = carousel5.position.y;
+            
+            // ROTATION CYCLIQUE DES 5 ÉTAGES : 1→2, 2→3, 3→4, 4→5, 5→1
+            const carousel1TargetLevel = carousel1.userData.level === 5 ? 1 : carousel1.userData.level + 1;
+            const carousel2TargetLevel = carousel2.userData.level === 5 ? 1 : carousel2.userData.level + 1;
+            const carousel3TargetLevel = carousel3.userData.level === 5 ? 1 : carousel3.userData.level + 1;
+            const carousel4TargetLevel = carousel4.userData.level === 5 ? 1 : carousel4.userData.level + 1;
+            const carousel5TargetLevel = carousel5.userData.level === 5 ? 1 : carousel5.userData.level + 1;
+            
+            // Définir les positions et échelles selon le niveau
+            function getLevelProperties(level) {
+                switch(level) {
+                    case 1: return { y: 20, scale: 1.0 };   // Étage le plus haut
+                    case 2: return { y: 8, scale: 0.85 };   // 2ème étage
+                    case 3: return { y: -4, scale: 0.7 };   // 3ème étage (centre)
+                    case 4: return { y: -16, scale: 0.55 }; // 4ème étage
+                    case 5: return { y: -28, scale: 0.4 };  // Étage le plus bas
+                }
+            }
+            
+            const carousel1Target = getLevelProperties(carousel1TargetLevel);
+            const carousel2Target = getLevelProperties(carousel2TargetLevel);
+            const carousel3Target = getLevelProperties(carousel3TargetLevel);
+            const carousel4Target = getLevelProperties(carousel4TargetLevel);
+            const carousel5Target = getLevelProperties(carousel5TargetLevel);
+            
+            function animateSwitch() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = easeInOutCubic(progress);
+                
+                // Animer carousel1
+                const scale1 = carousel1StartScale + (carousel1Target.scale - carousel1StartScale) * easeProgress;
+                const y1 = carousel1StartY + (carousel1Target.y - carousel1StartY) * easeProgress;
+                carousel1.scale.set(scale1, scale1, scale1);
+                carousel1.position.y = y1;
+                
+                // Animer carousel2
+                const scale2 = carousel2StartScale + (carousel2Target.scale - carousel2StartScale) * easeProgress;
+                const y2 = carousel2StartY + (carousel2Target.y - carousel2StartY) * easeProgress;
+                carousel2.scale.set(scale2, scale2, scale2);
+                carousel2.position.y = y2;
+                
+                // Animer carousel3
+                const scale3 = carousel3StartScale + (carousel3Target.scale - carousel3StartScale) * easeProgress;
+                const y3 = carousel3StartY + (carousel3Target.y - carousel3StartY) * easeProgress;
+                carousel3.scale.set(scale3, scale3, scale3);
+                carousel3.position.y = y3;
+                
+                // Animer carousel4
+                const scale4 = carousel4StartScale + (carousel4Target.scale - carousel4StartScale) * easeProgress;
+                const y4 = carousel4StartY + (carousel4Target.y - carousel4StartY) * easeProgress;
+                carousel4.scale.set(scale4, scale4, scale4);
+                carousel4.position.y = y4;
+                
+                // Animer carousel5
+                const scale5 = carousel5StartScale + (carousel5Target.scale - carousel5StartScale) * easeProgress;
+                const y5 = carousel5StartY + (carousel5Target.y - carousel5StartY) * easeProgress;
+                carousel5.scale.set(scale5, scale5, scale5);
+                carousel5.position.y = y5;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateSwitch);
+                } else {
+                    // Mettre à jour les niveaux
+                    carousel1.userData.level = carousel1TargetLevel;
+                    carousel1.userData.targetScale = carousel1Target.scale;
+                    carousel1.userData.targetY = carousel1Target.y;
+                    
+                    carousel2.userData.level = carousel2TargetLevel;
+                    carousel2.userData.targetScale = carousel2Target.scale;
+                    carousel2.userData.targetY = carousel2Target.y;
+                    
+                    carousel3.userData.level = carousel3TargetLevel;
+                    carousel3.userData.targetScale = carousel3Target.scale;
+                    carousel3.userData.targetY = carousel3Target.y;
+                    
+                    carousel4.userData.level = carousel4TargetLevel;
+                    carousel4.userData.targetScale = carousel4Target.scale;
+                    carousel4.userData.targetY = carousel4Target.y;
+                    
+                    carousel5.userData.level = carousel5TargetLevel;
+                    carousel5.userData.targetScale = carousel5Target.scale;
+                    carousel5.userData.targetY = carousel5Target.y;
+                    
+                    isAnimating = false;
+                }
+            }
+            
+            animateSwitch();
+        }
+        
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+        }
+        
+        function autoRotate() {
+            autoRotation = !autoRotation;
+            const btn = event.target;
+            btn.textContent = autoRotation ? 'Stop Auto' : 'Auto-rotation';
+        }
+        
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            const time = Date.now() * 0.001;
+            
+            // Rotation des carrousels
+            if (autoRotation || !isAnimating) {
+                carousel1.rotation.y += config.carousel1.rotationSpeed;
+                carousel2.rotation.y += config.carousel2.rotationSpeed;
+                carousel3.rotation.y += config.carousel3.rotationSpeed;
+                carousel4.rotation.y += config.carousel4.rotationSpeed;
+                carousel5.rotation.y += config.carousel5.rotationSpeed;
+            }
+            
+            // Maintenir l'orientation des cartes
+            carousel1.children.forEach((cardGroup, index) => {
+                const angle = (index / config.carousel1.items) * Math.PI * 2;
+                cardGroup.rotation.y = angle + Math.PI/2;
+            });
+            
+            carousel2.children.forEach((cardGroup, index) => {
+                const angle = (index / config.carousel2.items) * Math.PI * 2;
+                cardGroup.rotation.y = angle + Math.PI/2;
+            });
+            
+            carousel3.children.forEach((cardGroup, index) => {
+                const angle = (index / config.carousel3.items) * Math.PI * 2;
+                cardGroup.rotation.y = angle + Math.PI/2;
+            });
+            
+            carousel4.children.forEach((cardGroup, index) => {
+                const angle = (index / config.carousel4.items) * Math.PI * 2;
+                cardGroup.rotation.y = angle + Math.PI/2;
+            });
+            
+            carousel5.children.forEach((cardGroup, index) => {
+                const angle = (index / config.carousel5.items) * Math.PI * 2;
+                cardGroup.rotation.y = angle + Math.PI/2;
+            });
+            
+            // Mouvement de caméra subtil
+            camera.position.x = Math.sin(time * 0.1) * 2;
+            camera.position.z = 25 + Math.cos(time * 0.15) * 3;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+        
+        function setupEvents() {
+            // Redimensionnement
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Contrôles souris
+            let mouseDown = false;
+            let mouseX = 0, mouseY = 0;
+            let mouseStartX = 0, mouseStartY = 0;
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                mouseStartX = e.clientX;
+                mouseStartY = e.clientY;
+            });
+            
+            renderer.domElement.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (mouseDown && !isAnimating) {
+                    const deltaX = e.clientX - mouseX;
+                    
+                    carousel1.rotation.y += deltaX * 0.01;
+                    carousel2.rotation.y -= deltaX * 0.01;
+                    carousel3.rotation.y += deltaX * 0.005;
+                    carousel4.rotation.y -= deltaX * 0.008;
+                    carousel5.rotation.y += deltaX * 0.012;
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                }
+            });
+            
+            // Clic pour alterner
+            renderer.domElement.addEventListener('click', (e) => {
+                if (Math.abs(e.clientX - mouseStartX) < 5 && Math.abs(e.clientY - mouseStartY) < 5) {
+                    switchCarousels();
+                }
+            });
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Initialiser
+        window.addEventListener('load', () => {
+            if (typeof THREE !== 'undefined') {
+                init();
+            } else {
+                console.error('Three.js not loaded');
+            }
+        });
+    </script>
+</body>
+</html>
